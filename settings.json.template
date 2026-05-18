@@ -1,0 +1,15 @@
+{
+  "_comment": "이 파일은 ~/.claude/settings.json 에 머지할 hooks 섹션 템플릿입니다. {{USER_HOME}}을 실제 홈 디렉토리 경로로 치환하세요 (Windows: C:/Users/<id>, macOS/Linux: /home/<id> 또는 /Users/<id>). 기존 settings.json이 있으면 hooks 키만 머지하세요.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"{{USER_HOME}}/.claude/hooks/sensitive-prompt-scan.js\""
+          }
+        ]
+      }
+    ]
+  }
+}
