@@ -75,7 +75,9 @@ const LABEL_PATTERNS = [
   {
     id: 'ACCT',
     label: '계좌번호',
-    regex: /((?:^|[\s,|\t])(?:계좌(?:번호)?)\s*[:：=]\s*)(\d[\d\-\s]{8,20}\d)(?=$|[\s,|\t.])/gm,
+    // 자유 텍스트("계좌번호: 123-456-789")와 JSON 키("계좌번호":"123456789012") 모두 매칭.
+    // 키/값을 감싸는 큰따옴표(선택)와 JSON 종결자(" , } ])를 허용한다.
+    regex: /((?:^|[\s,|\t{])"?(?:계좌(?:번호)?)"?\s*[:：=]\s*"?)(\d[\d\-\s]{8,20}\d)(?=["'\s,|\t.\]}]|$)/gm,
   },
 ];
 
@@ -103,19 +105,22 @@ function applyMasks(text) {
   let masked = text;
   let totalReplacements = 0;
 
-  // 값 기반: 매치 전체를 치환
-  for (const p of VALUE_PATTERNS) {
-    masked = masked.replace(p.regex, (m) => {
-      totalReplacements += 1;
-      return getPlaceholder(p.id, p.label, m);
-    });
-  }
-
-  // 라벨 기반: prefix는 보존하고 두 번째 그룹(value)만 치환
+  // 라벨 기반 먼저: prefix는 보존하고 두 번째 그룹(value)만 치환.
+  // 라벨로 카테고리가 확정되는 값(예: "계좌번호":"...")은 값 기반(RRN 등)보다
+  // 우선 적용해야 한다. 그렇지 않으면 13자리 계좌번호가 RRN 정규식에 먼저 걸려
+  // [주민번호_N]으로 잘못 마스킹된다.
   for (const p of LABEL_PATTERNS) {
     masked = masked.replace(p.regex, (m, prefix, value) => {
       totalReplacements += 1;
       return prefix + getPlaceholder(p.id, p.label, value);
+    });
+  }
+
+  // 값 기반: 라벨로 안 잡힌 나머지를 매치 전체 치환
+  for (const p of VALUE_PATTERNS) {
+    masked = masked.replace(p.regex, (m) => {
+      totalReplacements += 1;
+      return getPlaceholder(p.id, p.label, m);
     });
   }
 

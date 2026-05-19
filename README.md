@@ -102,11 +102,13 @@ Entry 케이스 3종:
 # 본인 PC에서 (Node.js 만 있으면 됨, 외부 의존성 0)
 node analysis/analyze_pii_log.js              # 전체 기간, text 출력
 node analysis/analyze_pii_log.js 30           # 최근 30일
-node analysis/analyze_pii_log.js 30 markdown  # THREAT_MODEL.md 부록 B 용
+node analysis/analyze_pii_log.js 30 markdown  # 최근 30일, markdown 출력
 node analysis/analyze_pii_log.js all markdown # 전체 기간 + 마크다운
 ```
 
 **출력 항목**: 기간/세션 수 / 이벤트 요약(차단·우회·에러) / 카테고리별 차단 빈도 + 비율 / Bypass 분포 + 비율 / 일별 추이(최근 14일)
+
+실측 예시 출력은 [`docs/operational-stats.md`](docs/operational-stats.md) 참고.
 
 **활용 패턴**:
 - 주간 모니터링: `node analysis/analyze_pii_log.js 7 markdown > weekly_report.md`
