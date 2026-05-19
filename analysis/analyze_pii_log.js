@@ -5,7 +5,7 @@
  * 사용법:
  *   node analyze_pii_log.js                # 전체 기간, text 출력
  *   node analyze_pii_log.js 30             # 최근 30일
- *   node analyze_pii_log.js 30 markdown    # 마크다운 (THREAT_MODEL 부록 B 용)
+ *   node analyze_pii_log.js 30 markdown    # 최근 30일, 마크다운 출력
  *   node analyze_pii_log.js all markdown   # 전체 기간 + 마크다운
  *
  * 입력: ~/.claude/logs/sensitive-prompt-scan.log (JSON Lines)
@@ -76,16 +76,25 @@ for (const line of lines) {
 // ─── 기간 필터 ──────────────────────────────────────────────────
 const now = Date.now();
 const cutoff = days !== null ? now - (days * DAY_MS) : 0;
-const entries = allEntries.filter(e => {
+const periodEntries = allEntries.filter(e => {
   if (!e || !e.ts) return false;
   const t = new Date(e.ts).getTime();
   return Number.isFinite(t) && t >= cutoff;
 });
 
+// ─── 테스트 세션 제외 ───────────────────────────────────────────
+// 실제 Claude Code 세션 ID 는 UUID. 비-UUID sessionId(수동 stdin 테스트 등)는
+// 운영 통계를 오염시키므로 제외하고, 제외 건수만 별도로 보고한다.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isProdSession = id => typeof id === 'string' && UUID_RE.test(id);
+const entries = periodEntries.filter(e => isProdSession(e.sessionId));
+const testEntryCount = periodEntries.length - entries.length;
+
 // ─── 빈 결과 처리 ───────────────────────────────────────────────
 if (entries.length === 0) {
   const period = days !== null ? `최근 ${days}일` : '전체 기간';
-  console.log(`(${period} 동안 로그 entry 0건)`);
+  console.log(`(${period} 동안 운영 로그 entry 0건)`);
+  if (testEntryCount > 0) console.log(`(테스트 세션 제외: ${testEntryCount}건)`);
   if (parseErrors > 0) console.log(`(파싱 실패 라인: ${parseErrors}건)`);
   process.exit(0);
 }
@@ -159,6 +168,7 @@ function renderText() {
   lines.push(`  우회         ${String(bypasses.length).padStart(3)}  (일평균 ${(bypasses.length / spanDays).toFixed(1)})`);
   if (errorEntries.length > 0) lines.push(`  에러         ${String(errorEntries.length).padStart(3)}`);
   if (parseErrors > 0) lines.push(`  파싱 실패    ${String(parseErrors).padStart(3)}`);
+  if (testEntryCount > 0) lines.push(`  테스트 제외   ${String(testEntryCount).padStart(3)}  (비-UUID 세션)`);
   lines.push('');
 
   if (catSorted.length > 0) {
@@ -198,14 +208,15 @@ function renderText() {
 // ─── 출력: markdown (THREAT_MODEL 부록 B용) ─────────────────────
 function renderMarkdown() {
   const lines = [];
-  lines.push(`## 부록 B. 운영 실측 데이터 (${fmtDate(now)} 기준)`);
+  lines.push(`## 운영 실측 데이터 (${fmtDate(now)} 기준)`);
   lines.push('');
   lines.push(`- 측정 기간: \`${fmtDate(firstTs)}\` ~ \`${fmtDate(lastTs)}\` (${spanDays}일)`);
   lines.push(`- 고유 세션: **${sessions.size}**`);
+  if (testEntryCount > 0) lines.push(`- 테스트 세션 제외: ${testEntryCount}건 (비-UUID sessionId)`);
   if (parseErrors > 0) lines.push(`- 파싱 실패 라인: ${parseErrors} (skip 처리)`);
   lines.push('');
 
-  lines.push('### B.1. 이벤트 요약');
+  lines.push('### 이벤트 요약');
   lines.push('');
   lines.push('| 이벤트 | 건수 | 일평균 |');
   lines.push('|--------|------|--------|');
@@ -215,7 +226,7 @@ function renderMarkdown() {
   lines.push('');
 
   if (catSorted.length > 0) {
-    lines.push('### B.2. 카테고리별 차단 빈도');
+    lines.push('### 카테고리별 차단 빈도');
     lines.push('');
     lines.push('| 카테고리 | 건수 | 비율 |');
     lines.push('|---------|------|------|');
@@ -227,7 +238,7 @@ function renderMarkdown() {
   }
 
   if (bypasses.length > 0) {
-    lines.push('### B.3. Bypass 분포');
+    lines.push('### Bypass 분포');
     lines.push('');
     lines.push('| 우회 경로 | 건수 |');
     lines.push('|----------|------|');
@@ -239,7 +250,7 @@ function renderMarkdown() {
     lines.push('');
   }
 
-  lines.push(`### B.4. 일별 추이 (최근 ${trendDays}일)`);
+  lines.push(`### 일별 추이 (최근 ${trendDays}일)`);
   lines.push('');
   lines.push('| 날짜 | 차단 | 우회 |');
   lines.push('|------|------|------|');
