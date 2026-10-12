@@ -124,6 +124,10 @@ function startMock() {
   check('외국인등록번호(8)·공백', rrn('900101 8234567'), true);
   check('로그에 원문 없음', fs.readFileSync(EVENT_LOG, 'utf8').includes('8234567'), false);
   check('뒷자리 첫 숫자 9 → 아님', rrn('900101-9234567'), false);
+  // 훅은 결과를 JSON.stringify 해서 보므로 줄바꿈·탭이 \n · \t 두 글자가 된다 — 그 뒤의 번호도 잡아야 한다
+  check('줄 첫머리(JSON 의 \\n 뒤)', rrn('첫 줄\n900101-1234567'), true);
+  check('탭 뒤(JSON 의 \\t 뒤)', rrn('이름\t9001011234567'), true);
+  check('문장 끝 마침표', rrn('주민번호는 900101-1234567.'), true);
 
   fs.rmSync(HOME, { recursive: true, force: true });
   console.log(`\n합계: ${pass} pass / ${fail} fail`);
