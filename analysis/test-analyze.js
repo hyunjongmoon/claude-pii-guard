@@ -90,6 +90,35 @@ check('출처 표기 ~/.claude/logs/pii-gate-events.log', out.includes('`~/.clau
 out = run(['all'], env);
 check('--log 없으면 예전처럼 프롬프트 스캔 로그', /^\s+차단\s+2\b/m.test(out) && !out.includes('게이트'));
 
+console.log('\n=== 7. 검토 제외 목록 (<로그>.exclude.jsonl) ===');
+// 시각이 다 다른 기록 — 제외 키는 ts·sessionId·tool·decision 이다
+const at = (min) => new Date(Date.now() - min * 60e3).toISOString();
+const REVIEW = [
+  { ts: at(50), sessionId: S1, tool: 'Bash', decision: 'detect', categories: { 주민등록번호: 2 } }, // 오탐으로 판정
+  { ts: at(40), sessionId: S1, tool: 'Read', decision: 'detect', categories: { 이메일: 1 } }, // 테스트 값으로 판정
+  { ts: at(30), sessionId: S2, tool: 'Bash', decision: 'detect', categories: { 휴대전화: 1 } }, // 남는다
+  { ts: at(20), sessionId: S1, tool: 'mcp__idea__execute_sql_query', decision: 'block', categories: {}, reason: 'widget-down' }, // 남는다
+];
+const reviewLog = path.join(HOME, 'review.log');
+fs.writeFileSync(reviewLog, REVIEW.map((r) => JSON.stringify(r)).join('\n') + '\n');
+const pick = (r, reason) => JSON.stringify({ ts: r.ts, sessionId: r.sessionId, tool: r.tool, decision: r.decision, reason });
+fs.writeFileSync(path.join(HOME, 'review.exclude.jsonl'), [
+  pick(REVIEW[0], 'false-positive'),
+  pick(REVIEW[1], 'test-value'),
+  JSON.stringify({ ts: at(999), sessionId: S1, tool: 'Bash', decision: 'detect', reason: 'test-value' }), // 로그에 없는 항목
+].join('\n') + '\n');
+
+out = run(['all', '--log', reviewLog]);
+check('제외 후 탐지 1 · 차단 1', /실행 후 탐지\s+1\b/.test(out) && /게이트 차단\s+1\b/.test(out));
+check('뺀 건수와 사유를 보인다', /검토 제외\s+2\s+\(오탐 1 · 테스트 값 1/.test(out));
+check('제외 목록에만 있는 항목을 알린다', /제외 불일치\s+1\b/.test(out));
+check('뺀 기록의 카테고리는 집계에서 빠진다', !/주민등록번호/.test(out.split('실행 후 탐지 카테고리:')[1] || '') && /휴대전화\s+1/.test(out));
+out = run(['all', '--log', reviewLog, '--no-exclude']);
+check('--no-exclude 면 원래 숫자', /실행 후 탐지\s+3\b/.test(out) && !/검토 제외\s+\d/.test(out) && out.includes('--no-exclude'));
+out = run(['all', 'markdown', '--log', reviewLog]);
+check('markdown 에도 검토 제외 표기', out.includes('- 검토 제외: 2건 (오탐 1 · 테스트 값 1)'));
+check('원본 감사로그는 그대로', fs.readFileSync(reviewLog, 'utf8').split('\n').filter(Boolean).length === 4);
+
 console.log('\n=== 6. 인자 오류 ===');
 const bad = spawnSync('node', [BIN, '--log'], { encoding: 'utf8' });
 check('--log 뒤 경로 없음 → 종료코드 1', bad.status === 1 && bad.stderr.includes('--log'));

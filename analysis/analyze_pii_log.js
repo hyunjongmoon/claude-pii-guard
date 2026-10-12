@@ -9,6 +9,7 @@
  *   node analyze_pii_log.js all markdown   # 전체 기간 + 마크다운
  *   node analyze_pii_log.js 30 --log gate  # pii-gate 감사로그(~/.claude/logs/pii-gate-events.log)
  *   node analyze_pii_log.js --log <경로>    # 다른 로그 파일
+ *   node analyze_pii_log.js --no-exclude    # 검토 제외 목록(<로그>.exclude.jsonl)을 적용하지 않은 원래 숫자
  *
  * 입력: ~/.claude/logs/sensitive-prompt-scan.log (JSON Lines, --log 로 바꿀 수 있음)
  *
@@ -53,6 +54,9 @@ if (logFlag !== -1) {
   LOG_PATH = target === 'gate' ? path.join(LOG_DIR, 'pii-gate-events.log') : path.resolve(target);
   args.splice(logFlag, 2);
 }
+const noExcludeFlag = args.indexOf('--no-exclude');
+const useExcludes = noExcludeFlag === -1;
+if (!useExcludes) args.splice(noExcludeFlag, 1);
 const firstArg = args[0];
 
 let days = null; // null = 전체 기간
@@ -107,14 +111,50 @@ const periodEntries = allEntries.filter(e => {
 // 운영 통계를 오염시키므로 제외하고, 제외 건수만 별도로 보고한다.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isProdSession = id => typeof id === 'string' && UUID_RE.test(id);
-const entries = periodEntries.filter(e => isProdSession(e.sessionId));
-const testEntryCount = periodEntries.length - entries.length;
+const prodEntries = periodEntries.filter(e => isProdSession(e.sessionId));
+const testEntryCount = periodEntries.length - prodEntries.length;
+
+// ─── 검토 제외 ──────────────────────────────────────────────────
+// 원본 감사로그는 고치지 않는다 — 사후에 지운 감사로그는 감사로그가 아니다.
+// 검토해서 오탐·테스트로 판정한 항목은 옆 파일 <로그>.exclude.jsonl 에 적고 여기서 빼고 센다.
+// 뺀 건수는 사유별로 리포트에 늘 보이고, --no-exclude 로 원래 숫자를 볼 수 있다.
+//   { ts, sessionId, tool, decision, reason: 'false-positive' | 'test-value' | 'masked-output', note }
+const EXCLUDE_PATH = LOG_PATH.replace(/\.log$/, '') + '.exclude.jsonl';
+const EXCLUDE_LABEL = { 'false-positive': '오탐', 'test-value': '테스트 값', 'masked-output': '가린 출력' };
+const excludeKey = e => `${e.ts}|${e.sessionId}|${e.tool || ''}|${e.decision || ''}`;
+const excludes = new Map();
+if (useExcludes && fs.existsSync(EXCLUDE_PATH)) {
+  for (const line of fs.readFileSync(EXCLUDE_PATH, 'utf8').split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    try {
+      const x = JSON.parse(line);
+      excludes.set(excludeKey(x), x.reason || '사유 없음');
+    } catch (_e) {
+      // 깨진 줄은 건너뛴다 — 아래 '제외 불일치'에도 잡히지 않으므로 목록을 고칠 때 주의
+    }
+  }
+}
+const excludedByReason = {};
+const entries = prodEntries.filter(e => {
+  const reason = excludes.get(excludeKey(e));
+  if (reason === undefined) return true;
+  const label = EXCLUDE_LABEL[reason] || reason;
+  excludedByReason[label] = (excludedByReason[label] || 0) + 1;
+  return false;
+});
+const excludedCount = Object.values(excludedByReason).reduce((a, b) => a + b, 0);
+const excludedSummary = Object.entries(excludedByReason).map(([k, v]) => `${k} ${v}`).join(' · ');
+// 제외 목록에는 있는데 로그 어디에도 없는 항목 — 키가 틀렸거나 로그가 바뀐 것
+const logKeys = new Set(allEntries.filter(Boolean).map(excludeKey));
+const staleExcludes = [...excludes.keys()].filter(k => !logKeys.has(k)).length;
 
 // ─── 빈 결과 처리 ───────────────────────────────────────────────
 if (entries.length === 0) {
   const period = days !== null ? `최근 ${days}일` : '전체 기간';
   console.log(`(${period} 동안 운영 로그 entry 0건)`);
   if (testEntryCount > 0) console.log(`(테스트 세션 제외: ${testEntryCount}건)`);
+  if (excludedCount > 0) console.log(`(검토 제외: ${excludedCount}건 — ${excludedSummary})`);
+  if (staleExcludes > 0) console.log(`(제외 목록 불일치: ${staleExcludes}건 — 로그에 없는 항목)`);
   if (parseErrors > 0) console.log(`(파싱 실패 라인: ${parseErrors}건)`);
   process.exit(0);
 }
@@ -248,6 +288,9 @@ function renderText() {
   if (errorEntries.length > 0) lines.push(`  에러         ${String(errorEntries.length).padStart(3)}`);
   if (parseErrors > 0) lines.push(`  파싱 실패    ${String(parseErrors).padStart(3)}`);
   if (testEntryCount > 0) lines.push(`  테스트 제외   ${String(testEntryCount).padStart(3)}  (비-UUID 세션)`);
+  if (excludedCount > 0) lines.push(`  검토 제외    ${String(excludedCount).padStart(3)}  (${excludedSummary} — ${path.basename(EXCLUDE_PATH)})`);
+  if (staleExcludes > 0) lines.push(`  제외 불일치  ${String(staleExcludes).padStart(3)}  (제외 목록에만 있고 로그에 없음 — 키 확인)`);
+  if (!useExcludes) lines.push('  (--no-exclude — 검토 제외 목록을 적용하지 않은 원래 숫자)');
   if (unknownEntries.length > 0) lines.push(`  분류 불가    ${String(unknownEntries.length).padStart(3)}  (알 수 없는 형식 — 버리지 않고 셈)`);
   lines.push('');
 
@@ -310,6 +353,9 @@ function renderMarkdown() {
   lines.push(`- 측정 기간: \`${fmtDate(firstTs)}\` ~ \`${fmtDate(lastTs)}\` (${spanDays}일)`);
   lines.push(`- 고유 세션: **${sessions.size}**`);
   if (testEntryCount > 0) lines.push(`- 테스트 세션 제외: ${testEntryCount}건 (비-UUID sessionId)`);
+  if (excludedCount > 0) lines.push(`- 검토 제외: ${excludedCount}건 (${excludedSummary}) — \`${path.basename(EXCLUDE_PATH)}\``);
+  if (staleExcludes > 0) lines.push(`- 제외 목록 불일치: ${staleExcludes}건 (로그에 없는 항목)`);
+  if (!useExcludes) lines.push('- `--no-exclude`: 검토 제외 목록을 적용하지 않은 원래 숫자');
   if (parseErrors > 0) lines.push(`- 파싱 실패 라인: ${parseErrors} (skip 처리)`);
   lines.push('');
 

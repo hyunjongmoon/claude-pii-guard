@@ -109,6 +109,7 @@ node analysis/analyze_pii_log.js 30 markdown  # 최근 30일, markdown 출력
 node analysis/analyze_pii_log.js all markdown # 전체 기간 + 마크다운
 node analysis/analyze_pii_log.js 30 --log gate  # pii-gate 감사로그(~/.claude/logs/pii-gate-events.log)
 node analysis/analyze_pii_log.js --log <경로>   # 다른 로그 파일
+node analysis/analyze_pii_log.js --no-exclude   # 검토 제외 목록을 적용하지 않은 원래 숫자
 node analysis/test-analyze.js                 # 분석기 검증 (임시 폴더에서만 돎)
 ```
 
@@ -125,3 +126,13 @@ node analysis/test-analyze.js                 # 분석기 검증 (임시 폴더�
 게이트 차단(사유별 — `no-response`·`timeout` 은 「응답 없음」으로 합산)·허용·실행 후 탐지(카테고리별)를 따로 센다.
 어느 형식에도 맞지 않는 줄은 버리지 않고 **분류 불가**로 센다 — 형식이 바뀌어 0건이 정상처럼 보이는 일을 막기 위해서다.
 예전 형식 로그의 출력은 바뀌지 않는다.
+
+**검토 제외** — 검토해서 오탐·테스트 값으로 판정한 기록은 감사로그를 고치지 않고(사후에 지운 감사로그는 감사로그가 아니다)
+옆 파일 `<로그>.exclude.jsonl` 에 한 줄씩 적는다. 분석기는 그 기록을 빼고 세고, 뺀 건수를 사유별로 늘 보인다.
+
+```jsonc
+{ "ts": "<감사로그의 ts>", "sessionId": "...", "tool": "Bash", "decision": "detect",
+  "reason": "false-positive" | "test-value" | "masked-output", "note": "판정 근거" }
+```
+
+키는 `ts`·`sessionId`·`tool`·`decision` 네 개다. 제외 목록에만 있고 로그에 없는 항목은 「제외 불일치」로 따로 보인다.
