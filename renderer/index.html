@@ -1,0 +1,42 @@
+<meta charset="utf-8" />
+<title>PII Guard</title>
+<link rel="stylesheet" href="styles.css" />
+
+<header id="bar">
+  <span id="dot" class="dot down"></span>
+  <span id="title">PII Guard</span>
+  <span id="port"></span>
+  <span class="spacer"></span>
+  <button id="btn-logs" class="win" title="로그 폴더 열기">📂</button>
+  <button id="btn-pin" class="win on" title="항상 위">📌</button>
+  <button id="btn-min" class="win" title="최소화">—</button>
+  <button id="btn-close" class="win" title="종료">✕</button>
+</header>
+
+<section id="gate" hidden>
+  <div id="gate-head">클로드 서버로 넘기시겠습니까?</div>
+  <div id="gate-reason"></div>
+  <pre id="gate-cmd"></pre>
+  <div id="gate-summary"></div>
+  <div id="gate-actions">
+    <button id="btn-deny" class="act deny">차단</button>
+    <button id="btn-allow" class="act allow">허용하고 전송</button>
+  </div>
+  <div id="gate-count">응답이 없으면 <b id="secs">90</b>초 후 자동 차단됩니다</div>
+</section>
+
+<section id="legend">
+  <span><i class="sw query"></i>DB조회</span>
+  <span><i class="sw masked"></i>마스킹됨</span>
+  <span><i class="sw leak"></i>미마스킹 PII</span>
+  <span><i class="sw deny"></i>차단</span>
+  <span><i class="sw gate"></i>확인대기</span>
+  <span><i class="sw plain"></i>일반</span>
+</section>
+
+<main id="list"></main>
+
+<footer id="foot"><span id="counts"></span></footer>
+
+<script src="format.js"></script>
+<script src="renderer.js"></script>

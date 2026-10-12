@@ -1,0 +1,13 @@
+{
+  "name": "pii-guard-widget",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Claude Code 감사로그 실시간 모니터 + PII 전송 사전 컨펌 게이트",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}

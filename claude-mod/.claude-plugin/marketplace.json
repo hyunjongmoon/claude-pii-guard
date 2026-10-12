@@ -1,0 +1,5 @@
+{
+  "name": "pii-gate-local",
+  "owner": { "name": "local" },
+  "plugins": [{ "name": "pii-gate-view", "source": "./" }]
+}

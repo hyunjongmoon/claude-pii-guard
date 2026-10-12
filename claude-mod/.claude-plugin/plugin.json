@@ -1,0 +1,6 @@
+{
+  "name": "pii-gate-view",
+  "version": "0.1.0",
+  "description": "PII 게이트 감사로그(pii-gate-events.log)를 상태줄·프롬프트 위 띠·/pii 패널로 보여준다",
+  "types": "./types/index.d.ts"
+}
