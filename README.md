@@ -107,6 +107,9 @@ node analysis/analyze_pii_log.js              # 전체 기간, text 출력
 node analysis/analyze_pii_log.js 30           # 최근 30일
 node analysis/analyze_pii_log.js 30 markdown  # 최근 30일, markdown 출력
 node analysis/analyze_pii_log.js all markdown # 전체 기간 + 마크다운
+node analysis/analyze_pii_log.js 30 --log gate  # pii-gate 감사로그(~/.claude/logs/pii-gate-events.log)
+node analysis/analyze_pii_log.js --log <경로>   # 다른 로그 파일
+node analysis/test-analyze.js                 # 분석기 검증 (임시 폴더에서만 돎)
 ```
 
 **출력 항목**: 기간/세션 수 / 이벤트 요약(차단·우회·에러) / 카테고리별 차단 빈도 + 비율 / Bypass 분포 + 비율 / 일별 추이(최근 14일)
@@ -118,5 +121,7 @@ node analysis/analyze_pii_log.js all markdown # 전체 기간 + 마크다운
 - 보안 문서 부록: `node analysis/analyze_pii_log.js 30 markdown` → 출력 그대로 위협 모델 문서의 운영 통계 자리에 붙이기
 - 정책 튜닝 신호: 우회 비율 15%+ 면 정규식 false positive 조정 검토
 
-> `pii-gate/` 의 감사로그(`pii-gate-events.log`)는 형식이 다르다(`replacements` 대신 `decision`).
-> 이 분석기에 넣으면 전부 0건으로 나오므로, 그 로그를 세려면 `decision` 분기가 필요하다(미반영).
+`pii-gate/` 의 감사로그는 형식이 다르다(`replacements` 대신 `decision`). `--log gate` 로 넣으면
+게이트 차단(사유별 — `no-response`·`timeout` 은 「응답 없음」으로 합산)·허용·실행 후 탐지(카테고리별)를 따로 센다.
+어느 형식에도 맞지 않는 줄은 버리지 않고 **분류 불가**로 센다 — 형식이 바뀌어 0건이 정상처럼 보이는 일을 막기 위해서다.
+예전 형식 로그의 출력은 바뀌지 않는다.
