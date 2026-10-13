@@ -91,6 +91,18 @@ const data2 = JSON.parse(fs.readFileSync(out2, 'utf8').match(/<script type="appl
 check('--with-source 면 출처를 싣는다', data2.withSource === true && data2.events.some((e) => e.src === '[sql] SELECT EMP_NO, RRN FROM T WHERE NAME=?'));
 check('--with-source 여도 세션 ID·설정은 없다', !/sessionId|11111111-1111/.test(JSON.stringify(data2)) && !fs.readFileSync(out2, 'utf8').includes(SECRET));
 
+console.log('\n=== 사후 복원 출처 ===');
+// 출처 없던 게이트 차단(at 90)에 복원 출처를 붙인다
+fs.writeFileSync(path.join(C, 'logs', 'pii-gate-events.backfill.jsonl'),
+  jsonl([{ ts: gate[0].ts, sessionId: S1, tool: gate[0].tool, decision: 'block', source: { kind: 'sql', text: 'SELECT RRN FROM T' }, reconstructed: true }]));
+const out3 = path.join(HOME, 'out', 'dash-bf.html');
+execFileSync('node', [BIN, '--out', out3, '--with-source'], { env, encoding: 'utf8' });
+const data3 = JSON.parse(fs.readFileSync(out3, 'utf8').match(/<script type="application\/json" id="data">([\s\S]*?)<\/script>/)[1]);
+const blk = data3.events.find((e) => e.stage === 'gate' && e.decision === 'block');
+check('복원 출처로 판정(주민번호 컬럼 지정 → 요청함)', blk && blk.req.verdict === 'requested' && blk.rebuilt === true);
+check('출처에 사후 복원 표시', blk && blk.src === '[sql · 사후 복원] SELECT RRN FROM T');
+check('복원 없는 기록엔 표시 없음', data3.events.filter((e) => e.rebuilt).length === 1);
+
 console.log('\n=== 인자 오류 ===');
 const bad = spawnSync('node', [BIN, '--out'], { env, encoding: 'utf8' });
 check('--out 뒤 경로 없음 → 종료코드 1', bad.status === 1);

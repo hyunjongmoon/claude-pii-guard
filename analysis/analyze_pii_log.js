@@ -148,6 +148,28 @@ const entries = prodEntries.filter(e => {
 });
 const excludedCount = Object.values(excludedByReason).reduce((a, b) => a + b, 0);
 const excludedSummary = Object.entries(excludedByReason).map(([k, v]) => `${k} ${v}`).join(' · ');
+// ─── 사후 복원 출처 ─────────────────────────────────────────────
+// 출처 기록 기능 이전의 기록은 세션 기록에서 찾아 옆 파일 <로그>.backfill.jsonl 에 옮겨 둔 출처를 붙인다.
+// 원본 감사로그는 그대로이고, 붙인 출처에는 사후 복원 표시가 남는다(훅이 그 자리에서 남긴 것과 구분).
+const BACKFILL_PATH = LOG_PATH.replace(/\.log$/, '') + '.backfill.jsonl';
+if (fs.existsSync(BACKFILL_PATH)) {
+  const backfill = new Map();
+  for (const line of fs.readFileSync(BACKFILL_PATH, 'utf8').split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    try {
+      const x = JSON.parse(line);
+      if (x.source) backfill.set(excludeKey(x), x.source);
+    } catch (_e) {
+      // 깨진 줄은 건너뛴다
+    }
+  }
+  for (const e of allEntries) {
+    if (!e || e.source) continue;
+    const s = backfill.get(excludeKey(e));
+    if (s) { e.source = s; e.sourceReconstructed = true; }
+  }
+}
+
 // 제외 목록에는 있는데 로그 어디에도 없는 항목 — 키가 틀렸거나 로그가 바뀐 것
 const logKeys = new Set(allEntries.filter(Boolean).map(excludeKey));
 const staleExcludes = [...excludes.keys()].filter(k => !logKeys.has(k)).length;
@@ -447,11 +469,15 @@ function renderDetail() {
   const kst = t => new Date(new Date(t).getTime() + 9 * 3600e3).toISOString();
   const recent = judged.slice(-20).reverse();
   const cats = e => Object.entries(e.categories || {}).map(([k, v]) => `${k}×${v}`).join(', ') || '-';
-  const src = e => (e.source ? `[${e.source.kind}] ${e.source.text}` : '(출처 없음)');
+  const src = e => (e.source ? `[${e.source.kind}${e.sourceReconstructed ? ' · 사후 복원' : ''}] ${e.source.text}` : '(출처 없음)');
+  const rebuilt = gateRows.filter(e => e.sourceReconstructed).length;
+  const rebuiltNote = rebuilt ? `사후 복원 출처 ${rebuilt}건 — 출처 기록 이전 기록을 세션 기록에서 옮겨 둔 것(${path.basename(BACKFILL_PATH)})` : '';
 
   if (mode === 'markdown') {
     const out = ['', `### 기록별 출처 · 요청 여부 (최근 ${recent.length}건, KST)`, ''];
-    out.push(`- ${Object.entries(tally).map(([k, v]) => `${k} ${v}`).join(' · ') || '기록 없음'}`, '');
+    out.push(`- ${Object.entries(tally).map(([k, v]) => `${k} ${v}`).join(' · ') || '기록 없음'}`);
+    if (rebuiltNote) out.push(`- ${rebuiltNote}`);
+    out.push('');
     out.push('| 시각 | 판정 | 도구 | 걸린 종류 | 요청 여부 | 출처 |', '|---|---|---|---|---|---|');
     for (const { e, c } of recent) {
       out.push(`| ${kst(e.ts).slice(5, 16).replace('T', ' ')} | ${e.decision} | ${e.tool} | ${cats(e)} | ${c.label} | ${src(e).replace(/\|/g, '\\|').slice(0, 160)} |`);
@@ -460,6 +486,7 @@ function renderDetail() {
   }
   const out = ['', `기록별 출처 · 요청 여부 (최근 ${recent.length}건, KST):`];
   out.push(`  ${Object.entries(tally).map(([k, v]) => `${k} ${v}`).join(' · ') || '기록 없음'}`);
+  if (rebuiltNote) out.push(`  ${rebuiltNote}`);
   for (const { e, c } of recent) {
     out.push(`  ${kst(e.ts).slice(5, 16).replace('T', ' ')}  ${e.decision.padEnd(6)} ${e.tool}  ${cats(e)}`);
     out.push(`      요청: ${c.label}${c.cats.length ? ' (' + c.cats.map(x => `${x.cat} ${x.requested === true ? '지정함' : x.requested === false ? '지정 안 함' : '?'}`).join(', ') + ')' : ''}`);

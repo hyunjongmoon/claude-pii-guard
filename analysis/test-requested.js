@@ -24,7 +24,8 @@ check('종류별로 무엇을 지정했는지', mixed.cats.map((c) => `${c.cat}:
 check('SELECT * → 판단 불가', classify(det({ 이메일: 1 }, 'sql', 'SELECT * FROM T')).verdict, 'unknown');
 check('SELECT t.* → 판단 불가', classify(det({ 이메일: 1 }, 'sql', 'SELECT t.* FROM T t')).verdict, 'unknown');
 check('파일 읽기 → 판단 불가', classify(det({ 이메일: 1 }, 'file', 'C:/work/a.csv')).verdict, 'unknown');
-check('명령에 컬럼 이름이 있으면 요청함', classify(det({ 이메일: 1 }, 'command', 'grep -i email data.csv')).verdict, 'requested');
+check('명령은 낱말이 있어도 판단 불가(약한 근거)', classify(det({ 이메일: 1 }, 'command', 'grep -i email data.csv')).verdict, 'unknown');
+check('게이트 기록도 명령이면 판단 불가', classify({ decision: 'block', categories: {}, source: { kind: 'command', text: 'grep ACCNO x' } }).verdict, 'unknown');
 check('출처 없음 → 근거 없음', classify(det({ 이메일: 1 })).verdict, 'no-source');
 check('한글 컬럼 이름', classify(det({ 주민등록번호: 1 }, 'sql', 'SELECT 주민번호 FROM T')).verdict, 'requested');
 check('공공 표준 용어(MBTLNUM)', classify(det({ 휴대전화: 1 }, 'sql', 'SELECT MBTLNUM FROM T')).verdict, 'requested');

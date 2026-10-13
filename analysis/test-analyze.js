@@ -137,6 +137,24 @@ check('--detail 없으면 기존 출력 그대로', !run(['all', '--log', srcLog
 out = run(['all', 'markdown', '--log', srcLog, '--detail']);
 check('markdown 표', out.includes('| 시각 | 판정 | 도구 | 걸린 종류 | 요청 여부 | 출처 |'));
 
+console.log('\n=== 9. 사후 복원 출처 (<로그>.backfill.jsonl) ===');
+const OLDREC = [
+  { ts: at(25), sessionId: S1, tool: 'mcp__idea__execute_sql_query', decision: 'detect', categories: { 계좌번호: 1 } }, // 출처 없음 → 복원
+  { ts: at(24), sessionId: S1, tool: 'mcp__idea__execute_sql_query', decision: 'detect', categories: { 이메일: 1 },
+    source: { kind: 'sql', text: 'SELECT EMAIL FROM T' } }, // 훅이 남긴 출처 — 복원으로 덮지 않는다
+];
+const bfLog = path.join(HOME, 'bf.log');
+fs.writeFileSync(bfLog, OLDREC.map((r) => JSON.stringify(r)).join('\n') + '\n');
+fs.writeFileSync(path.join(HOME, 'bf.backfill.jsonl'), [
+  JSON.stringify({ ts: OLDREC[0].ts, sessionId: S1, tool: OLDREC[0].tool, decision: 'detect', source: { kind: 'sql', text: 'SELECT ENTITY_ID FROM ERD' }, reconstructed: true }),
+  JSON.stringify({ ts: OLDREC[1].ts, sessionId: S1, tool: OLDREC[1].tool, decision: 'detect', source: { kind: 'sql', text: 'SELECT * FROM X' }, reconstructed: true }),
+].join('\n') + '\n');
+out = run(['all', '--log', bfLog, '--detail']);
+check('복원 출처로 판정한다(계좌 컬럼 없음 → 요청 안 함)', /계좌번호 지정 안 함/.test(out) && /요청 안 함 — 오탐 가능성 1/.test(out));
+check('복원 표시가 붙는다', out.includes('[sql · 사후 복원] SELECT ENTITY_ID FROM ERD') && /사후 복원 출처 1건/.test(out));
+check('훅이 남긴 출처는 덮지 않는다', out.includes('[sql] SELECT EMAIL FROM T') && !out.includes('SELECT * FROM X'));
+check('원본 로그는 그대로', fs.readFileSync(bfLog, 'utf8').split('\n').filter(Boolean).every((l) => !JSON.parse(l).reconstructed));
+
 console.log('\n=== 6. 인자 오류 ===');
 const bad = spawnSync('node', [BIN, '--log'], { encoding: 'utf8' });
 check('--log 뒤 경로 없음 → 종료코드 1', bad.status === 1 && bad.stderr.includes('--log'));

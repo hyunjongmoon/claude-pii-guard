@@ -8,7 +8,7 @@
  *
  *   requested      탐지된 종류를 모두 컬럼으로 지정한 조회        → 요청한 것
  *   not-requested  지정하지 않은 종류가 탐지됨(SQL)              → 오탐 가능성, 검토 대상
- *   unknown        SELECT * · 파일 읽기 · 명령 출력 등           → 출처를 보고 판단
+ *   unknown        SELECT * · 파일 읽기 · 명령 출력 · 화면 입력  → 출처를 보고 판단
  *   no-source      출처 기록 기능 이전의 기록
  * 탐지된 종류가 없는 기록(게이트의 차단·허용 — 실행 전 판정)은 "이 조회가 어떤 개인정보 컬럼을
  * 달라고 했나"를 본다: 하나라도 지정했으면 requested, 없으면 no-pii-columns.
@@ -40,10 +40,12 @@ function classify(entry) {
   const out = (verdict, perCat) => ({ verdict, label: LABEL[verdict], cats: perCat });
   if (!src || !src.text) return out('no-source', cats.map((cat) => ({ cat, requested: null })));
 
+  // "요청함"은 SQL 에서 컬럼으로 지정했을 때만 — 명령·파일·화면 입력에 낱말이 있다는 건 약한 근거다
+  // (실측: 점검 명령의 검색어 ACCNO·EMAIL 이 "요청"으로 읽혔다). 그런 출처는 늘 판단 불가로 두고 사람이 본다.
+  if (src.kind !== 'sql') return out('unknown', cats.map((cat) => ({ cat, requested: null })));
   const named = (cat) => (KEYWORDS[cat] ? KEYWORDS[cat].test(src.text) : false);
-  // 컬럼을 이름으로 고르지 않은 조회·명령·파일은 "안 했다"고 말할 수 없다
-  const star = src.kind === 'sql' && /\bselect\s+(?:distinct\s+)?(?:\w+\.)?\*/i.test(src.text);
-  const undecidable = src.kind !== 'sql' || star;
+  // 컬럼을 이름으로 고르지 않은 조회(SELECT *)는 "안 했다"고 말할 수 없다
+  const undecidable = /\bselect\s+(?:distinct\s+)?(?:\w+\.)?\*/i.test(src.text);
 
   if (cats.length === 0) {
     const asked = Object.keys(KEYWORDS).filter(named).map((cat) => ({ cat, requested: true }));

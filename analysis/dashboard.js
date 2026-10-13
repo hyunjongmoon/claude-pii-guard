@@ -92,9 +92,19 @@ const mapCats = (c) => {
 let testExcluded = 0;
 let unknown = 0;
 const events = [];
+// 출처 기록 이전 기록의 사후 복원 출처 — 세션 기록에서 옮겨 둔 <로그>.backfill.jsonl
+const loadBackfill = (log) => {
+  const m = new Map();
+  for (const x of readJsonl(log.replace(/\.log$/, '') + '.backfill.jsonl')) if (x.source) m.set(excludeKey(x), x.source);
+  return m;
+};
+
 function take(file, kind) {
   const excludes = loadExcludes(file);
-  for (const e of readJsonl(file)) {
+  const backfill = loadBackfill(file);
+  for (const raw of readJsonl(file)) {
+    const rebuilt = raw && !raw.source ? backfill.get(excludeKey(raw)) : undefined;
+    const e = rebuilt ? { ...raw, source: rebuilt } : raw;
     const t = Date.parse(e && e.ts);
     if (!Number.isFinite(t)) continue;
     if (!(typeof e.sessionId === 'string' && UUID_RE.test(e.sessionId))) { testExcluded += 1; continue; }
@@ -115,7 +125,8 @@ function take(file, kind) {
       cats: mapCats(e.categories),
       excluded: excludes.get(excludeKey(e)) || null,
       req: judged ? { verdict: judged.verdict, label: judged.label } : null,
-      ...(WITH_SOURCE && e.source ? { src: `[${e.source.kind}] ${e.source.text}` } : {}),
+      ...(rebuilt ? { rebuilt: true } : {}),
+      ...(WITH_SOURCE && e.source ? { src: `[${e.source.kind}${rebuilt ? ' · 사후 복원' : ''}] ${e.source.text}` } : {}),
     });
   }
 }
