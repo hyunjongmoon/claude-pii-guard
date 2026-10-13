@@ -119,6 +119,24 @@ out = run(['all', 'markdown', '--log', reviewLog]);
 check('markdown 에도 검토 제외 표기', out.includes('- 검토 제외: 2건 (오탐 1 · 테스트 값 1)'));
 check('원본 감사로그는 그대로', fs.readFileSync(reviewLog, 'utf8').split('\n').filter(Boolean).length === 4);
 
+console.log('\n=== 8. --detail: 출처와 요청 여부 ===');
+const SRC = [
+  { ts: at(15), sessionId: S1, tool: 'mcp__idea__execute_sql_query', decision: 'detect', categories: { 주민등록번호: 1 },
+    source: { kind: 'sql', text: 'SELECT EMP_NO, RRN FROM T WHERE NAME=?' } },
+  { ts: at(10), sessionId: S1, tool: 'mcp__idea__execute_sql_query', decision: 'detect', categories: { 계좌번호: 1 },
+    source: { kind: 'sql', text: 'SELECT ENTITY_ID, NAME FROM ERD' } },
+  { ts: at(5), sessionId: S1, tool: 'Bash', decision: 'detect', categories: { 이메일: 1 } }, // 출처 기록 이전
+];
+const srcLog = path.join(HOME, 'src.log');
+fs.writeFileSync(srcLog, SRC.map((r) => JSON.stringify(r)).join('\n') + '\n');
+out = run(['all', '--log', srcLog, '--detail']);
+check('판정 집계', /요청함 1/.test(out) && /요청 안 함 — 오탐 가능성 1/.test(out) && /근거 없음\(출처 기록 이전\) 1/.test(out));
+check('종류별 지정 여부', /주민등록번호 지정함/.test(out) && /계좌번호 지정 안 함/.test(out));
+check('출처를 그대로 보인다', out.includes('출처: [sql] SELECT EMP_NO, RRN FROM T WHERE NAME=?'));
+check('--detail 없으면 기존 출력 그대로', !run(['all', '--log', srcLog]).includes('요청 여부'));
+out = run(['all', 'markdown', '--log', srcLog, '--detail']);
+check('markdown 표', out.includes('| 시각 | 판정 | 도구 | 걸린 종류 | 요청 여부 | 출처 |'));
+
 console.log('\n=== 6. 인자 오류 ===');
 const bad = spawnSync('node', [BIN, '--log'], { encoding: 'utf8' });
 check('--log 뒤 경로 없음 → 종료코드 1', bad.status === 1 && bad.stderr.includes('--log'));

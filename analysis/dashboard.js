@@ -5,6 +5,7 @@
  *
  *   node analysis/dashboard.js                        # ./pii-dashboard.html
  *   node analysis/dashboard.js --out 보고/현황.html
+ *   node analysis/dashboard.js --with-source      # 내부 검토용 — 기록마다 출처(조회·명령·파일) 문구까지
  *
  * 읽는 것 (읽기 전용):
  *   ~/.claude/logs/pii-gate-events.log        (+ .exclude.jsonl)  게이트 판정 · 실행 후 탐지
@@ -33,6 +34,10 @@ if (outFlag !== -1 && !args[outFlag + 1]) {
   process.exit(1);
 }
 const OUT = path.resolve(outFlag !== -1 ? args[outFlag + 1] : 'pii-dashboard.html');
+// 출처(조회·명령·파일) 문구까지 싣는다 — 리터럴은 훅이 이미 ? 로 바꿨지만 테이블·컬럼 이름이 드러나므로
+// 기본은 판정(요청 여부)만 싣고, 내부 검토용일 때만 켠다.
+const WITH_SOURCE = args.includes('--with-source');
+const { classify } = require('./requested');
 
 // ─── 읽기 ───────────────────────────────────────────────────────
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -102,12 +107,15 @@ function take(file, kind) {
     else if (e.decision === 'pass') row = { stage: 'gate', decision: 'pass' };
     else if (e.decision === 'detect') row = { stage: 'detect', decision: 'detect' };
     if (!row) { unknown += 1; continue; }
+    const judged = kind === 'gate' ? classify(e) : null;
     events.push({
       t,
       ...row,
       tool: kind === 'prompt' ? '프롬프트 입력' : friendlyTool(e.tool),
       cats: mapCats(e.categories),
       excluded: excludes.get(excludeKey(e)) || null,
+      req: judged ? { verdict: judged.verdict, label: judged.label } : null,
+      ...(WITH_SOURCE && e.source ? { src: `[${e.source.kind}] ${e.source.text}` } : {}),
     });
   }
 }
@@ -177,7 +185,7 @@ const status = [
   },
 ];
 
-const data = { generatedAt: Date.now(), status, events, testExcluded, unknown };
+const data = { generatedAt: Date.now(), status, events, testExcluded, unknown, withSource: WITH_SOURCE };
 const json = JSON.stringify(data).replace(/</g, '\\u003c');
 
 // 화면은 dashboard-page.html 한 파일 — 데이터 자리(__DATA__)만 채운다

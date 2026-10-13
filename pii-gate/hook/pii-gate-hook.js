@@ -188,9 +188,11 @@ function scanPii(text) {
  * 감사로그 한 줄 — sensitive-prompt-scan.log 와 같은 형식(ts·sessionId·categories)이라
  * 기존 분석기를 그대로 쓸 수 있다. categories 에는 종류별 건수만 싣는다.
  * 실패를 삼키지 않고 오류 코드를 돌려준다 — 경보 문구가 기록 여부를 사실대로 말해야 한다.
+ * source 는 이 판정을 낳은 조회·명령·파일 — "그 종류를 요청한 조회였나"를 나중에 확인하는 근거.
  */
 function logEvent(payload, decision, fields, reason) {
   try {
+    const source = sourceOf(payload && payload.tool_input);
     fs.mkdirSync(path.dirname(EVENT_LOG), { recursive: true });
     fs.appendFileSync(EVENT_LOG, JSON.stringify({
       ts: new Date().toISOString(),
@@ -199,6 +201,7 @@ function logEvent(payload, decision, fields, reason) {
       decision,
       categories: Object.fromEntries((fields || []).map((f) => [f.key, f.count])),
       ...(reason ? { reason } : {}),
+      ...(source ? { source } : {}),
     }) + '\n', 'utf8');
     return null;
   } catch (e) {
@@ -216,6 +219,38 @@ function redact(text) {
     out = out.replace(re, (s) => (ok && !ok(s) ? s : '●'.repeat(Math.min(s.length, 12))));
   }
   return out;
+}
+
+/**
+ * 감사로그에 남길 출처 — 값은 남기지 않는다.
+ *   SQL   문자열·숫자 리터럴을 ? 로 바꾼다. 이름(WHERE NAME='…')처럼 정규식이 못 잡는 값까지 빠지고,
+ *         "무슨 컬럼을 달라고 했나"는 그대로 남는다 — 그게 확인하려는 것이다.
+ *   명령  PII 모양을 가리고(redact) 비밀값(password=… 등)을 *** 로 가린다.
+ *   파일  경로만.
+ */
+function sourceOf(inp) {
+  if (!inp || typeof inp !== 'object') return null;
+  const clip = (s) => String(s).replace(/\s+/g, ' ').trim().slice(0, 400);
+  const sql = inp.sql || inp.query;
+  if (typeof sql === 'string' && sql.trim()) return { kind: 'sql', text: clip(normalizeSql(sql)) };
+  if (typeof inp.command === 'string') return { kind: 'command', text: clip(maskSecrets(redact(inp.command))) };
+  const file = inp.file_path || inp.path;
+  if (typeof file === 'string') return { kind: 'file', text: clip(file) };
+  if (typeof inp.table === 'string') return { kind: 'sql', text: clip([inp.schema, inp.table].filter(Boolean).join('.')) };
+  for (const k of ['url', 'text', 'code']) {
+    if (typeof inp[k] === 'string' && inp[k].trim()) return { kind: 'input', text: clip(maskSecrets(redact(inp[k]))) };
+  }
+  return null;
+}
+
+function normalizeSql(s) {
+  return String(s)
+    .replace(/'(?:[^']|'')*'/g, '?')
+    .replace(/(?<![\w.])\d+(?:\.\d+)?(?![\w.])/g, '?');
+}
+
+function maskSecrets(s) {
+  return String(s).replace(/((?:password|passwd|pwd|secret|token|api[_-]?key)["']?\s*[:=]\s*["']?)[^\s"'&,;]+/gi, '$1***');
 }
 
 function post(info, urlPath, body, timeoutMs) {

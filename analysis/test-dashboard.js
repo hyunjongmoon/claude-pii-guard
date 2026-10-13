@@ -35,7 +35,8 @@ fs.writeFileSync(path.join(C, 'hooks', 'pii-gate-hook.js'), '// stub');
 const gate = [
   { ts: at(90), sessionId: S1, tool: 'mcp__idea__execute_sql_query', decision: 'block', categories: {}, reason: 'widget-down' },
   { ts: at(80), sessionId: S1, tool: 'mcp__idea__execute_sql_query', decision: 'pass', categories: {} },
-  { ts: at(70), sessionId: S1, tool: 'Bash', decision: 'detect', categories: { 주민등록번호: 1 } },
+  { ts: at(70), sessionId: S1, tool: 'mcp__idea__execute_sql_query', decision: 'detect', categories: { 주민등록번호: 1 },
+    source: { kind: 'sql', text: 'SELECT EMP_NO, RRN FROM T WHERE NAME=?' } },
   { ts: at(60), sessionId: S1, tool: 'Read', decision: 'detect', categories: { 이메일: 2 } }, // 검토 제외로 판정
   { ts: at(50), sessionId: 'manual', tool: 'Bash', decision: 'detect', categories: { 이메일: 1 } }, // 비-UUID
 ];
@@ -77,6 +78,18 @@ check('세션 ID 없음', !html.includes(S1) && !/sessionId/.test(JSON.stringify
 check('설정 파일 내용 없음', !html.includes(SECRET) && !html.includes('autoMode'));
 check('원래 도구 이름(mcp__…) 없음', !/mcp__/.test(JSON.stringify(data)));
 check('홈 경로 없음', !html.includes(HOME));
+
+console.log('\n=== 요청 여부 · 출처 ===');
+const rrnRow = data.events.find((e) => e.cats['주민등록번호'] === 1 && e.stage === 'detect');
+check('요청 여부 판정을 싣는다(지정한 컬럼 → 요청함)', rrnRow && rrnRow.req && rrnRow.req.verdict === 'requested');
+check('출처가 없던 기록은 근거 없음', data.events.some((e) => e.req && e.req.verdict === 'no-source'));
+check('프롬프트 검사 기록에는 요청 여부 없음', data.events.filter((e) => e.stage === 'prompt').every((e) => e.req === null));
+check('기본은 출처 문구를 싣지 않는다', !data.events.some((e) => 'src' in e) && !html.includes('SELECT EMP_NO') && data.withSource === false);
+const out2 = path.join(HOME, 'out', 'dash-src.html');
+execFileSync('node', [BIN, '--out', out2, '--with-source'], { env, encoding: 'utf8' });
+const data2 = JSON.parse(fs.readFileSync(out2, 'utf8').match(/<script type="application\/json" id="data">([\s\S]*?)<\/script>/)[1]);
+check('--with-source 면 출처를 싣는다', data2.withSource === true && data2.events.some((e) => e.src === '[sql] SELECT EMP_NO, RRN FROM T WHERE NAME=?'));
+check('--with-source 여도 세션 ID·설정은 없다', !/sessionId|11111111-1111/.test(JSON.stringify(data2)) && !fs.readFileSync(out2, 'utf8').includes(SECRET));
 
 console.log('\n=== 인자 오류 ===');
 const bad = spawnSync('node', [BIN, '--out'], { env, encoding: 'utf8' });

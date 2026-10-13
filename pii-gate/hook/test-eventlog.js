@@ -129,6 +129,34 @@ function startMock() {
   check('탭 뒤(JSON 의 \\t 뒤)', rrn('이름\t9001011234567'), true);
   check('문장 끝 마침표', rrn('주민번호는 900101-1234567.'), true);
 
+  console.log('\n=== (d) 출처 기록 — 요청한 조회였는지 확인할 근거, 값은 빼고 ===');
+  const last = () => lines().at(-1) || {};
+  reset();
+  run({ tool_name: 'mcp__idea__execute_sql_query', tool_input: {
+    query: "SELECT EMP_NO, RRN FROM T WHERE NAME='홍길동' AND RRN='900101-1234567' AND ROWNUM <= 10" } });
+  let src = last().source || {};
+  check('게이트 차단에도 SQL 출처', src.kind === 'sql', true);
+  check('컬럼·테이블은 남는다', /SELECT EMP_NO, RRN FROM T/.test(src.text || ''), true);
+  check('문자열·숫자 리터럴은 ? 로', /NAME=\? AND RRN=\? AND ROWNUM <= \?/.test(src.text || ''), true);
+  check('이름·주민번호 값은 없다', !/홍길동|900101/.test(fs.readFileSync(EVENT_LOG, 'utf8')), true);
+
+  reset();
+  run({ tool_name: 'Bash', tool_input: { command: 'curl -u admin --password=hunter2 https://x/api?token=abc123 ; echo 010-1234-5678' },
+    tool_response: { stdout: '연락처 010-1234-5678' } });
+  src = last().source || {};
+  check('명령 출처', src.kind === 'command', true);
+  check('비밀값은 ***', /password=\*\*\*/.test(src.text || '') && /token=\*\*\*/.test(src.text || '') && !/hunter2|abc123/.test(src.text || ''), true);
+  check('명령 안의 PII 모양도 가린다', !/010-1234-5678/.test(src.text || ''), true);
+
+  reset();
+  run({ tool_name: 'Read', tool_input: { file_path: 'C:/work/data.csv' }, tool_response: { content: 'a@b.co.kr' } });
+  check('파일은 경로만', JSON.stringify(last().source) === JSON.stringify({ kind: 'file', text: 'C:/work/data.csv' }), true);
+
+  reset();
+  run({ tool_name: 'mcp__masked-db__get_table_metadata', tool_input: { schema: 'APPDB', table: 'TB_PERSON_CONTACT' },
+    tool_response: { rows: [{ EMAIL: 'x@example.com' }] } });
+  check('테이블 조회는 스키마.테이블', last().source && last().source.text === 'APPDB.TB_PERSON_CONTACT', true);
+
   fs.rmSync(HOME, { recursive: true, force: true });
   console.log(`\n합계: ${pass} pass / ${fail} fail`);
   process.exit(fail ? 1 : 0);

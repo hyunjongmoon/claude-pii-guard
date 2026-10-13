@@ -67,8 +67,13 @@
   td.n{text-align:right;font-variant-numeric:tabular-nums}
   tr.ex td{color:var(--mute)}
   /* 좁은 화면에서 열이 한 글자 폭으로 쪼그라들지 않게 — 표는 상자 안에서 옆으로 넘긴다 */
-  #recent table{min-width:720px}
+  #recent table{min-width:820px}
   #recent td{white-space:nowrap}
+  .req{font-size:12.5px}
+  .req.warn{font-weight:700;color:var(--ink)}
+  .req.warn::before{content:"⚠ ";color:var(--crit)}
+  .req.muted{color:var(--mute)}
+  td.src{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--dim)}
   .tag{font-size:11.5px;border:1px solid var(--line);border-radius:999px;padding:1px 8px;white-space:nowrap;color:var(--dim)}
   .cats{display:grid;grid-template-columns:max-content 1fr max-content;gap:8px 12px;align-items:center;font-size:14px}
   .cats .track{height:12px;background:var(--soft);border-radius:4px;overflow:hidden}
@@ -233,6 +238,8 @@
     var notes = [];
     if (n.bypass) notes.push('검사 우회 ' + n.bypass + '건(사용자가 일부러 통과시킴, 기록 남음)');
     if (n.error) notes.push('검사 오류 ' + n.error + '건');
+    var notAsked = used.filter(function (e) { return e.req && e.req.verdict === 'not-requested'; }).length;
+    if (notAsked) notes.push('요청하지 않은 종류가 탐지된 기록 ' + notAsked + '건 — 오탐 가능성, 검토 대상');
     if (D.testExcluded) notes.push('수동 테스트 기록 ' + D.testExcluded + '건은 처음부터 셈에서 뺌');
     if (B.capped) notes.push('추이는 최근 90일만 그림');
     document.getElementById('kpiNote').textContent = notes.join(' · ');
@@ -279,13 +286,18 @@
     var DEC = { block: '막음', pass: '허용', detect: '탐지(경보)', bypass: '우회', error: '오류' };
     var STAGE = { prompt: '질문 검사', gate: 'DB 조회 확인', detect: '실행 후 탐지' };
     var recent = all.slice(-15).reverse();
+    // 요청 여부 — 탐지된 종류를 그 조회가 컬럼으로 지정했었나. 숫자만으로는 진짜 탐지인지 알 수 없어서 함께 보인다.
+    var REQ_CLASS = { requested: '', 'not-requested': ' warn', unknown: ' muted', 'no-source': ' muted', 'no-pii-columns': ' muted' };
     document.getElementById('recent').innerHTML = recent.length
-      ? '<table><tr><th>시각</th><th>단계</th><th>판정</th><th>어디서</th><th>걸린 종류</th><th>검토</th></tr>' +
+      ? '<table><tr><th>시각</th><th>단계</th><th>판정</th><th>어디서</th><th>걸린 종류</th><th>요청 여부</th>' +
+        (D.withSource ? '<th>출처</th>' : '') + '<th>검토</th></tr>' +
         recent.map(function (e) {
           var c = Object.keys(e.cats).map(function (k) { return k + ' ' + e.cats[k]; }).join(' · ') || '-';
+          var req = e.req ? '<span class="req' + (REQ_CLASS[e.req.verdict] || '') + '">' + esc(e.req.label) + '</span>' : '-';
+          var src = D.withSource ? '<td class="src" title="' + esc(e.src || '') + '">' + esc(e.src ? e.src.slice(0, 70) + (e.src.length > 70 ? '…' : '') : '-') + '</td>' : '';
           return '<tr' + (e.excluded ? ' class="ex"' : '') + '><td>' + esc(stamp(e.t)) + '</td><td>' + esc(STAGE[e.stage]) +
             '</td><td>' + esc(DEC[e.decision] + (e.reason ? ' · ' + e.reason : '')) + '</td><td>' + esc(e.tool) + '</td><td>' + esc(c) +
-            '</td><td>' + (e.excluded ? '<span class="tag" title="' + esc(e.excluded.note) + '">통계 제외 · ' + esc(e.excluded.label) + '</span>' : '') + '</td></tr>';
+            '</td><td>' + req + '</td>' + src + '<td>' + (e.excluded ? '<span class="tag" title="' + esc(e.excluded.note) + '">통계 제외 · ' + esc(e.excluded.label) + '</span>' : '') + '</td></tr>';
         }).join('') + '</table>'
       : '<div class="empty">이 기간에는 기록이 없습니다.</div>';
 
@@ -374,6 +386,8 @@
   document.getElementById('foot').innerHTML =
     '이 페이지에 담긴 것은 판정 시각·단계·종류·건수뿐입니다. 개인정보 값, 질문·명령·SQL 원문, 세션 식별자는 들어 있지 않습니다.<br>' +
     '「검토 제외」는 검토해서 오탐이나 테스트로 판정한 기록입니다 — 원본 감사로그는 고치지 않고 통계에서만 뺍니다.<br>' +
+    '「요청 여부」는 걸린 종류를 그 조회가 컬럼으로 지정했었는지입니다(컬럼 이름으로 추정). 「요청 안 함」은 오탐일 가능성이 높아 검토 대상입니다.<br>' +
+    (D.withSource ? '이 페이지에는 출처(조회·명령·파일) 문구가 들어 있습니다 — 값은 빠져 있지만 테이블·컬럼 이름이 보이므로 내부 검토용으로만 쓰십시오.<br>' : '') +
     '다시 만들기: <code>node analysis/dashboard.js --out &lt;파일&gt;</code>';
 
   render();

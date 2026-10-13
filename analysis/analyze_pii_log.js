@@ -10,6 +10,7 @@
  *   node analyze_pii_log.js 30 --log gate  # pii-gate 감사로그(~/.claude/logs/pii-gate-events.log)
  *   node analyze_pii_log.js --log <경로>    # 다른 로그 파일
  *   node analyze_pii_log.js --no-exclude    # 검토 제외 목록(<로그>.exclude.jsonl)을 적용하지 않은 원래 숫자
+ *   node analyze_pii_log.js --log gate --detail  # 게이트 기록마다 출처(조회·명령·파일)와 "요청한 조회였나" 판정
  *
  * 입력: ~/.claude/logs/sensitive-prompt-scan.log (JSON Lines, --log 로 바꿀 수 있음)
  *
@@ -57,6 +58,9 @@ if (logFlag !== -1) {
 const noExcludeFlag = args.indexOf('--no-exclude');
 const useExcludes = noExcludeFlag === -1;
 if (!useExcludes) args.splice(noExcludeFlag, 1);
+const detailFlag = args.indexOf('--detail');
+const showDetail = detailFlag !== -1;
+if (showDetail) args.splice(detailFlag, 1);
 const firstArg = args[0];
 
 let days = null; // null = 전체 기간
@@ -432,4 +436,37 @@ function renderMarkdown() {
   return lines.join('\n');
 }
 
+// ─── --detail: 게이트 기록마다 출처와 "요청한 조회였나" ─────────────
+// 숫자만으로는 그 탐지가 진짜인지 알 수 없다 — 무엇이 그 판정을 낳았는지 함께 본다.
+function renderDetail() {
+  const { classify } = require('./requested');
+  const gateRows = entries.filter(e => e.decision === 'block' || e.decision === 'pass' || e.decision === 'detect');
+  const judged = gateRows.map(e => ({ e, c: classify(e) }));
+  const tally = {};
+  for (const { c } of judged) tally[c.label] = (tally[c.label] || 0) + 1;
+  const kst = t => new Date(new Date(t).getTime() + 9 * 3600e3).toISOString();
+  const recent = judged.slice(-20).reverse();
+  const cats = e => Object.entries(e.categories || {}).map(([k, v]) => `${k}×${v}`).join(', ') || '-';
+  const src = e => (e.source ? `[${e.source.kind}] ${e.source.text}` : '(출처 없음)');
+
+  if (mode === 'markdown') {
+    const out = ['', `### 기록별 출처 · 요청 여부 (최근 ${recent.length}건, KST)`, ''];
+    out.push(`- ${Object.entries(tally).map(([k, v]) => `${k} ${v}`).join(' · ') || '기록 없음'}`, '');
+    out.push('| 시각 | 판정 | 도구 | 걸린 종류 | 요청 여부 | 출처 |', '|---|---|---|---|---|---|');
+    for (const { e, c } of recent) {
+      out.push(`| ${kst(e.ts).slice(5, 16).replace('T', ' ')} | ${e.decision} | ${e.tool} | ${cats(e)} | ${c.label} | ${src(e).replace(/\|/g, '\\|').slice(0, 160)} |`);
+    }
+    return out.join('\n');
+  }
+  const out = ['', `기록별 출처 · 요청 여부 (최근 ${recent.length}건, KST):`];
+  out.push(`  ${Object.entries(tally).map(([k, v]) => `${k} ${v}`).join(' · ') || '기록 없음'}`);
+  for (const { e, c } of recent) {
+    out.push(`  ${kst(e.ts).slice(5, 16).replace('T', ' ')}  ${e.decision.padEnd(6)} ${e.tool}  ${cats(e)}`);
+    out.push(`      요청: ${c.label}${c.cats.length ? ' (' + c.cats.map(x => `${x.cat} ${x.requested === true ? '지정함' : x.requested === false ? '지정 안 함' : '?'}`).join(', ') + ')' : ''}`);
+    out.push(`      출처: ${src(e).slice(0, 160)}`);
+  }
+  return out.join('\n');
+}
+
 console.log(mode === 'markdown' ? renderMarkdown() : renderText());
+if (showDetail) console.log(renderDetail());
