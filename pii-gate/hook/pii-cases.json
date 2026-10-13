@@ -124,6 +124,18 @@
   [
    "C1B23456-7890-1234-A567-89ABCDEF0123",
    []
+  ],
+  [
+   "Class changed 'com.example.web.board.BoardController@org.springframework.boot.devtools.restart.classloader.RestartClassLoader'",
+   []
+  ],
+  [
+   "<script src=\"https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js\">",
+   []
+  ],
+  [
+   "lodash@4.17.21",
+   []
   ]
  ],
  "반드시_검출되어야_하는_것": [
@@ -233,6 +245,24 @@
    "입금계좌 110-123-456789",
    [
     "계좌번호"
+   ]
+  ],
+  [
+   "JOHN@EXAMPLE.COM",
+   [
+    "이메일"
+   ]
+  ],
+  [
+   "user@Example.Com",
+   [
+    "이메일"
+   ]
+  ],
+  [
+   "Mary.McDonald@company.co.kr",
+   [
+    "이메일"
    ]
   ]
  ],

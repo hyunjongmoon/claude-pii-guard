@@ -38,6 +38,7 @@ vm.createContext(ctx);
 vm.runInContext(grabFn('luhn'), ctx);
 vm.runInContext(grabFn('cardOk'), ctx);
 vm.runInContext(grabFn('rrnOk'), ctx);
+vm.runInContext(grabFn('emailOk'), ctx);
 vm.runInContext(`var PII_PATTERNS = ${grab('const PII_PATTERNS', '[', ']')};`, ctx);
 vm.runInContext(`var MASK_HINT = ${src.match(/const MASK_HINT = (\/.*\/);/)[1]};`, ctx);
 
