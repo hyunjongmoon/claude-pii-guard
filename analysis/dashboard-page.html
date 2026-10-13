@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PII 가드 현황</title>
+<style>
+  :root{color-scheme:light;
+    --ink:#16181d;--dim:#52514e;--mute:#8b93a1;--line:#e3e6ec;--bg:#fcfcfb;--card:#ffffff;--soft:#f4f5f7;
+    --s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;
+    --good:#0ca30c;--good-ink:#006300;--warn:#fab219;--crit:#d03b3b;--grid:#ecedf0}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;
+    --ink:#f2f3f5;--dim:#c3c2b7;--mute:#7d8594;--line:#2c313b;--bg:#1a1a19;--card:#212225;--soft:#26282d;
+    --s1:#3987e5;--s2:#d95926;--s3:#199e70;--good-ink:#6dc39a;--grid:#2a2d33}}
+  :root[data-theme="dark"]{color-scheme:dark;
+    --ink:#f2f3f5;--dim:#c3c2b7;--mute:#7d8594;--line:#2c313b;--bg:#1a1a19;--card:#212225;--soft:#26282d;
+    --s1:#3987e5;--s2:#d95926;--s3:#199e70;--good-ink:#6dc39a;--grid:#2a2d33}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.65;
+       font-family:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1040px;margin:0 auto;padding:36px 20px 64px}
+  h1{font-size:26px;margin:0;letter-spacing:-.02em}
+  .lede{color:var(--dim);margin:6px 0 0}
+  .meta{color:var(--mute);font-size:13px;margin-top:4px}
+  .hero{margin:22px 0 6px;padding:16px 18px;border-radius:12px;background:var(--card);border:1px solid var(--line);
+        display:flex;gap:12px;align-items:center;font-size:17px;font-weight:700}
+  .hero .dot{width:12px;height:12px;border-radius:50%;flex:none}
+  h2{font-size:14px;color:var(--dim);letter-spacing:.04em;margin:36px 0 12px;font-weight:700}
+  .grid{display:grid;gap:12px}
+  .status{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .card .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .card .name{font-weight:700}
+  .chip{font-size:12px;font-weight:700;border-radius:999px;padding:2px 9px;white-space:nowrap}
+  .chip.good{color:var(--good-ink);background:color-mix(in srgb,var(--good) 14%,transparent)}
+  .chip.crit{color:var(--crit);background:color-mix(in srgb,var(--crit) 14%,transparent)}
+  .chip.opt{color:var(--dim);background:var(--soft)}
+  .card .txt{font-size:13px;color:var(--dim);margin-top:6px}
+  .card .sub{font-size:12px;color:var(--mute);margin-top:6px}
+  .bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:4px 0 14px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card)}
+  .seg button{font:inherit;font-size:14px;border:0;background:transparent;color:var(--dim);padding:7px 14px;cursor:pointer}
+  .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg);font-weight:700}
+  .seg button:focus-visible,.chk input:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  .chk{font-size:14px;color:var(--dim);display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+  .kpis{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+  .kpi .label{font-size:13px;color:var(--dim);font-weight:700;display:flex;align-items:center;gap:7px}
+  .kpi .sw{width:10px;height:10px;border-radius:3px;flex:none}
+  .kpi .num{font-size:34px;font-weight:800;letter-spacing:-.02em;line-height:1.2;margin-top:4px;font-variant-numeric:tabular-nums}
+  .kpi .hint{font-size:12.5px;color:var(--mute);margin-top:2px}
+  .note{font-size:13px;color:var(--mute);margin-top:8px}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 16px 10px;position:relative}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;font-size:13px;color:var(--dim);margin:0 0 6px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+  svg text{font-family:inherit}
+  .tip{position:absolute;pointer-events:none;background:var(--card);border:1px solid var(--line);border-radius:8px;
+       padding:8px 10px;font-size:12.5px;box-shadow:0 4px 14px rgba(0,0,0,.12);min-width:130px;display:none;z-index:2}
+  .tip b{display:block;margin-bottom:3px}
+  .tip .r{display:flex;justify-content:space-between;gap:14px;color:var(--dim)}
+  .tip .r i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:6px}
+  details{margin-top:8px;font-size:13px}
+  summary{cursor:pointer;color:var(--dim)}
+  table{border-collapse:collapse;width:100%;font-size:13.5px}
+  th,td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{color:var(--mute);font-weight:700;font-size:12.5px;background:var(--soft)}
+  td.n{text-align:right;font-variant-numeric:tabular-nums}
+  tr.ex td{color:var(--mute)}
+  /* 좁은 화면에서 열이 한 글자 폭으로 쪼그라들지 않게 — 표는 상자 안에서 옆으로 넘긴다 */
+  #recent table{min-width:720px}
+  #recent td{white-space:nowrap}
+  .tag{font-size:11.5px;border:1px solid var(--line);border-radius:999px;padding:1px 8px;white-space:nowrap;color:var(--dim)}
+  .cats{display:grid;grid-template-columns:max-content 1fr max-content;gap:8px 12px;align-items:center;font-size:14px}
+  .cats .track{height:12px;background:var(--soft);border-radius:4px;overflow:hidden}
+  .cats .fill{height:100%;background:var(--s1);border-radius:0 4px 4px 0}
+  .cats .v{font-variant-numeric:tabular-nums;color:var(--dim)}
+  .empty{color:var(--mute);font-size:14px;padding:18px 4px}
+  .how{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+  .how .step{font-size:12px;font-weight:800;color:var(--s1);letter-spacing:.06em}
+  .how .t{font-weight:700;margin:2px 0 4px}
+  .how p{margin:0;font-size:13px;color:var(--dim)}
+  .scroll{overflow-x:auto}
+  footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);font-size:13px;color:var(--mute)}
+  footer code{font-family:ui-monospace,Consolas,monospace;font-size:12.5px;background:var(--soft);padding:1px 6px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>PII 가드 현황</h1>
+  <p class="lede">AI 도우미(Claude)가 일하는 동안 주민번호·전화번호 같은 개인정보가 밖으로 나가지 않게 막는 장치입니다.</p>
+  <div class="meta" id="meta"></div>
+  <div class="hero" id="hero"></div>
+
+  <h2>지금 상태</h2>
+  <div class="grid status" id="status"></div>
+
+  <h2>기간별 숫자</h2>
+  <div class="bar">
+    <div class="seg" role="group" aria-label="기간">
+      <button type="button" data-range="today">오늘</button>
+      <button type="button" data-range="7">최근 7일</button>
+      <button type="button" data-range="30">최근 30일</button>
+      <button type="button" data-range="all">전체</button>
+    </div>
+    <label class="chk"><input type="checkbox" id="withEx"> 검토 제외 기록도 포함</label>
+  </div>
+  <div class="grid kpis" id="kpis"></div>
+  <div class="note" id="kpiNote"></div>
+
+  <h2 id="trendTitle">추이</h2>
+  <div class="panel" id="trendPanel">
+    <div class="legend">
+      <span><i style="background:var(--s1)"></i>막음</span>
+      <span><i style="background:var(--s2)"></i>확인 후 허용</span>
+      <span><i style="background:var(--s3)"></i>실행 후 탐지</span>
+    </div>
+    <div id="trend"></div>
+    <div class="tip" id="tip" role="status"></div>
+    <details><summary>숫자로 보기</summary><div class="scroll" id="trendTable"></div></details>
+  </div>
+
+  <h2>어떤 개인정보가 걸렸나</h2>
+  <div class="panel" id="catPanel"><div id="cats"></div></div>
+
+  <h2>최근 기록</h2>
+  <div class="panel scroll" id="recent"></div>
+
+  <h2>어떻게 지키나</h2>
+  <div class="grid how">
+    <div class="card"><div class="step">① 질문 검사</div><div class="t">보내기 전에 막기</div>
+      <p>사용자가 보내는 질문에 주민번호·전화번호 등이 섞이면 보내기 전에 막고, 가린 문장을 대신 줍니다.</p></div>
+    <div class="card"><div class="step">② DB 조회 확인</div><div class="t">사람에게 먼저 묻기</div>
+      <p>AI가 DB에서 실데이터를 꺼내려 하면 먼저 확인창으로 묻습니다. 확인창이 꺼져 있으면 아예 막습니다.</p></div>
+    <div class="card"><div class="step">③ 실행 후 탐지</div><div class="t">놓친 것 알리기</div>
+      <p>도구 결과에 개인정보로 보이는 값이 있으면 경보를 띄웁니다. 이미 넘어간 뒤라 막지는 못하고, 알리고 기록합니다.</p></div>
+    <div class="card"><div class="step">④ 기록 · 통계</div><div class="t">모든 판정을 남기기</div>
+      <p>판정마다 감사로그에 한 줄씩 남깁니다. 개인정보 값은 남기지 않고 종류와 건수만 남깁니다.</p></div>
+  </div>
+
+  <footer id="foot"></footer>
+</div>
+
+<script type="application/json" id="data">__DATA__</script>
+<script>
+(function () {
+  'use strict';
+  var D = JSON.parse(document.getElementById('data').textContent);
+  var KST = 9 * 3600e3;
+  var NOW = D.generatedAt;
+  var state = { range: '7', withEx: false };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function iso(ms) { return new Date(ms + KST).toISOString(); }
+  function dayKey(ms) { return iso(ms).slice(0, 10); }
+  function md(ms) { var s = iso(ms); return s.slice(5, 7) + '/' + s.slice(8, 10); }
+  function hm(ms) { return iso(ms).slice(11, 16); }
+  function stamp(ms) { return ms ? md(ms) + ' ' + hm(ms) : '-'; }
+
+  // ── 머리 ──
+  document.getElementById('meta').textContent = '기준 ' + iso(NOW).slice(0, 10) + ' ' + hm(NOW) + ' (한국 시간)';
+  var required = D.status.filter(function (s) { return !s.optional; });
+  var off = required.filter(function (s) { return !s.ok; });
+  var hero = document.getElementById('hero');
+  hero.innerHTML = '<span class="dot" style="background:' + (off.length ? 'var(--crit)' : 'var(--good)') + '"></span>' +
+    (off.length
+      ? esc('보호 장치 ' + required.length + '개 중 ' + off.length + '개가 꺼져 있습니다 — ' + off.map(function (s) { return s.label; }).join(', '))
+      : esc('보호 장치 ' + required.length + '개가 모두 켜져 있습니다'));
+
+  // ── 지금 상태 ──
+  document.getElementById('status').innerHTML = D.status.map(function (s) {
+    var chip = s.ok ? '<span class="chip good">✓ 정상</span>'
+      : s.optional ? '<span class="chip opt">– 선택</span>' : '<span class="chip crit">✕ 꺼짐</span>';
+    var sub = s.installed ? '설치 ' + stamp(s.installed) : s.last ? '마지막 기록 ' + stamp(s.last) : '';
+    return '<div class="card"><div class="top"><span class="name">' + esc(s.label) + '</span>' + chip + '</div>' +
+      '<div class="txt">' + esc(s.ok ? s.on : s.off) + '</div>' + (sub ? '<div class="sub">' + esc(sub) + '</div>' : '') + '</div>';
+  }).join('');
+
+  // ── 기간 ──
+  function dayKeys(n) {
+    var out = [];
+    for (var i = n - 1; i >= 0; i--) out.push(dayKey(NOW - i * 86400e3));
+    return out;
+  }
+  function buckets() {
+    if (state.range === 'today') {
+      var today = dayKey(NOW);
+      var hs = [];
+      for (var h = 0; h < 24; h++) hs.push({ key: today + 'T' + (h < 10 ? '0' : '') + h, label: h + '시' });
+      return { list: hs, of: function (ms) { return iso(ms).slice(0, 13); }, unit: '시간별' };
+    }
+    var n = state.range === 'all'
+      ? Math.min(90, Math.max(1, Math.round((Date.parse(dayKey(NOW)) - Date.parse(dayKey(D.events.length ? D.events[0].t : NOW))) / 86400e3) + 1))
+      : Number(state.range);
+    return {
+      list: dayKeys(n).map(function (k) { return { key: k, label: k.slice(5, 7) + '/' + k.slice(8, 10) }; }),
+      of: dayKey, unit: '일별', capped: state.range === 'all' && n === 90,
+    };
+  }
+  function inRange(ev, B) {
+    if (state.range === 'all') return true;
+    var k = B.of(ev.t);
+    return B.list.some(function (b) { return b.key === k; });
+  }
+  function series(ev) {
+    if (ev.decision === 'block') return 'block';
+    if (ev.decision === 'pass') return 'pass';
+    if (ev.decision === 'detect') return 'detect';
+    return null;
+  }
+
+  function render() {
+    var B = buckets();
+    var all = D.events.filter(function (e) { return inRange(e, B); });
+    var used = all.filter(function (e) { return state.withEx || !e.excluded; });
+    var exN = all.filter(function (e) { return e.excluded; }).length;
+    var n = { block: 0, pass: 0, detect: 0, bypass: 0, error: 0 };
+    used.forEach(function (e) { n[e.decision] = (n[e.decision] || 0) + 1; });
+
+    var K = [
+      ['막음', n.block, 'var(--s1)', '개인정보가 담긴 질문·DB 조회를 보내기 전에 막은 횟수'],
+      ['확인 후 허용', n.pass, 'var(--s2)', '확인창에서 사람이 허용한 DB 조회'],
+      ['실행 후 탐지', n.detect, 'var(--s3)', '결과에 개인정보로 보이는 값이 있어 경보를 띄운 횟수'],
+      ['검토 제외', exN, 'var(--mute)', state.withEx ? '아래 숫자에 포함해서 보는 중' : '검토해서 오탐·테스트로 판정해 통계에서 뺀 기록'],
+    ];
+    document.getElementById('kpis').innerHTML = K.map(function (k) {
+      return '<div class="card kpi"><div class="label"><i class="sw" style="background:' + k[2] + '"></i>' + esc(k[0]) + '</div>' +
+        '<div class="num">' + k[1] + '</div><div class="hint">' + esc(k[3]) + '</div></div>';
+    }).join('');
+    var notes = [];
+    if (n.bypass) notes.push('검사 우회 ' + n.bypass + '건(사용자가 일부러 통과시킴, 기록 남음)');
+    if (n.error) notes.push('검사 오류 ' + n.error + '건');
+    if (D.testExcluded) notes.push('수동 테스트 기록 ' + D.testExcluded + '건은 처음부터 셈에서 뺌');
+    if (B.capped) notes.push('추이는 최근 90일만 그림');
+    document.getElementById('kpiNote').textContent = notes.join(' · ');
+
+    // 추이 — 막음/허용/탐지 쌓은 막대
+    document.getElementById('trendTitle').textContent = '추이 (' + B.unit + ')';
+    var rows = B.list.map(function (b) { return { label: b.label, key: b.key, block: 0, pass: 0, detect: 0 }; });
+    var idx = {};
+    rows.forEach(function (r, i) { idx[r.key] = i; });
+    used.forEach(function (e) {
+      var s = series(e);
+      var i = idx[B.of(e.t)];
+      if (s && i !== undefined) rows[i][s] += 1;
+    });
+    drawTrend(rows);
+    document.getElementById('trendTable').innerHTML = '<table><tr><th>' + (state.range === 'today' ? '시각' : '날짜') +
+      '</th><th>막음</th><th>확인 후 허용</th><th>실행 후 탐지</th><th>합계</th></tr>' +
+      rows.filter(function (r) { return r.block + r.pass + r.detect > 0; }).map(function (r) {
+        return '<tr><td>' + esc(r.label) + '</td><td class="n">' + r.block + '</td><td class="n">' + r.pass +
+          '</td><td class="n">' + r.detect + '</td><td class="n">' + (r.block + r.pass + r.detect) + '</td></tr>';
+      }).join('') + '</table>' +
+      (rows.some(function (r) { return r.block + r.pass + r.detect > 0; }) ? '' : '<div class="empty">이 기간에는 기록이 없습니다.</div>');
+
+    // 어떤 개인정보 — 막음·탐지의 종류별 건수
+    var cats = {};
+    used.forEach(function (e) {
+      if (e.decision !== 'block' && e.decision !== 'detect') return;
+      Object.keys(e.cats).forEach(function (k) { cats[k] = (cats[k] || 0) + e.cats[k]; });
+    });
+    var cs = Object.keys(cats).map(function (k) { return [k, cats[k]]; }).sort(function (a, b) { return b[1] - a[1]; });
+    if (cs.length > 7) {
+      var rest = cs.slice(6).reduce(function (a, c) { return a + c[1]; }, 0);
+      cs = cs.slice(0, 6).concat([['기타', rest]]);
+    }
+    var cmax = cs.reduce(function (a, c) { return Math.max(a, c[1]); }, 0);
+    document.getElementById('cats').innerHTML = cs.length
+      ? '<div class="cats">' + cs.map(function (c) {
+          return '<span>' + esc(c[0]) + '</span><div class="track" title="' + esc(c[0] + ' ' + c[1] + '건') +
+            '"><div class="fill" style="width:' + Math.max(2, c[1] / cmax * 100).toFixed(1) + '%"></div></div><span class="v">' + c[1] + '건</span>';
+        }).join('') + '</div>'
+      : '<div class="empty">이 기간에는 걸린 개인정보가 없습니다.</div>';
+
+    // 최근 기록 — 검토 제외 기록도 흐리게 보여 준다(숨기지 않는다)
+    var DEC = { block: '막음', pass: '허용', detect: '탐지(경보)', bypass: '우회', error: '오류' };
+    var STAGE = { prompt: '질문 검사', gate: 'DB 조회 확인', detect: '실행 후 탐지' };
+    var recent = all.slice(-15).reverse();
+    document.getElementById('recent').innerHTML = recent.length
+      ? '<table><tr><th>시각</th><th>단계</th><th>판정</th><th>어디서</th><th>걸린 종류</th><th>검토</th></tr>' +
+        recent.map(function (e) {
+          var c = Object.keys(e.cats).map(function (k) { return k + ' ' + e.cats[k]; }).join(' · ') || '-';
+          return '<tr' + (e.excluded ? ' class="ex"' : '') + '><td>' + esc(stamp(e.t)) + '</td><td>' + esc(STAGE[e.stage]) +
+            '</td><td>' + esc(DEC[e.decision] + (e.reason ? ' · ' + e.reason : '')) + '</td><td>' + esc(e.tool) + '</td><td>' + esc(c) +
+            '</td><td>' + (e.excluded ? '<span class="tag" title="' + esc(e.excluded.note) + '">통계 제외 · ' + esc(e.excluded.label) + '</span>' : '') + '</td></tr>';
+        }).join('') + '</table>'
+      : '<div class="empty">이 기간에는 기록이 없습니다.</div>';
+
+    Array.prototype.forEach.call(document.querySelectorAll('.seg button'), function (b) {
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-range') === state.range));
+    });
+  }
+
+  var SER = [['block', '막음', 'var(--s1)'], ['pass', '확인 후 허용', 'var(--s2)'], ['detect', '실행 후 탐지', 'var(--s3)']];
+  function drawTrend(rows) {
+    // 상자 실제 폭으로 그린다 — 고정 폭을 줄여 넣으면 휴대폰에서 글자가 4px 로 쪼그라든다
+    var box = document.getElementById('trend');
+    var W = Math.max(300, Math.round(box.clientWidth || 960)), H = 260, L = 34, R = 10, T = 14, Bm = 30;
+    var pw = W - L - R, ph = H - T - Bm;
+    var max = rows.reduce(function (a, r) { return Math.max(a, r.block + r.pass + r.detect); }, 0);
+    var step = max <= 4 ? 1 : Math.ceil(max / 4);
+    var top = Math.max(step, Math.ceil(max / step) * step);
+    var y = function (v) { return T + ph - v / top * ph; };
+    var slot = pw / rows.length;
+    var bw = Math.max(3, Math.min(28, slot * 0.62));
+    // 라벨은 폭에 맞는 만큼만, 마지막 칸부터 거꾸로 같은 간격으로 — 끝의 두 라벨이 겹치지 않게
+    var every = Math.max(1, Math.ceil(rows.length / Math.max(2, Math.floor(pw / 48))));
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="기간별 막음·허용·탐지 건수 막대그래프">';
+    for (var v = 0; v <= top; v += step) {
+      s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="var(--grid)" stroke-width="1"/>' +
+        '<text x="' + (L - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end" font-size="12" fill="var(--mute)">' + v + '</text>';
+    }
+    rows.forEach(function (r, i) {
+      var cx = L + slot * i + slot / 2, x = cx - bw / 2, base = y(0), segs = [];
+      SER.forEach(function (sr) { if (r[sr[0]] > 0) segs.push([r[sr[0]], sr[2]]); });
+      segs.forEach(function (sg, j) {
+        var h = sg[0] / top * ph, gap = j > 0 ? 2 : 0, y1 = base - h, hh = h - gap;
+        if (hh > 0) {
+          if (j === segs.length - 1) {
+            var rr = Math.min(4, hh, bw / 2);
+            s += '<path d="M' + x + ' ' + (y1 + hh + gap) + ' V' + (y1 + rr) + ' Q' + x + ' ' + y1 + ' ' + (x + rr) + ' ' + y1 +
+              ' H' + (x + bw - rr) + ' Q' + (x + bw) + ' ' + y1 + ' ' + (x + bw) + ' ' + (y1 + rr) + ' V' + (y1 + hh + gap) + ' Z" fill="' + sg[1] + '"/>';
+          } else {
+            s += '<rect x="' + x + '" y="' + y1 + '" width="' + bw + '" height="' + hh + '" fill="' + sg[1] + '"/>';
+          }
+        }
+        base = y1;
+      });
+      if ((rows.length - 1 - i) % every === 0) {
+        s += '<text x="' + cx + '" y="' + (H - 10) + '" text-anchor="middle" font-size="12" fill="var(--mute)">' + esc(r.label) + '</text>';
+      }
+      s += '<rect class="hit" data-i="' + i + '" x="' + (L + slot * i) + '" y="' + T + '" width="' + slot + '" height="' + ph +
+        '" fill="transparent" tabindex="0" aria-label="' + esc(r.label + ' 막음 ' + r.block + ', 허용 ' + r.pass + ', 탐지 ' + r.detect) + '"/>';
+    });
+    s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(0) + '" y2="' + y(0) + '" stroke="var(--line)" stroke-width="1"/>';
+    if (max === 0) s += '<text x="' + (L + pw / 2) + '" y="' + (T + ph / 2) + '" text-anchor="middle" font-size="14" fill="var(--mute)">이 기간에는 기록이 없습니다</text>';
+    s += '</svg>';
+    box.innerHTML = s;
+    var tip = document.getElementById('tip');
+    var panel = document.getElementById('trendPanel');
+    function show(el) {
+      var r = rows[Number(el.getAttribute('data-i'))];
+      tip.innerHTML = '<b>' + esc(r.label) + '</b>' + SER.map(function (sr) {
+        return '<div class="r"><span><i style="background:' + sr[2] + '"></i>' + esc(sr[1]) + '</span><span>' + r[sr[0]] + '</span></div>';
+      }).join('') + '<div class="r"><span>합계</span><span>' + (r.block + r.pass + r.detect) + '</span></div>';
+      tip.style.display = 'block';
+      var pr = panel.getBoundingClientRect(), er = el.getBoundingClientRect();
+      var left = er.left - pr.left + er.width / 2 + 10;
+      if (left + tip.offsetWidth > pr.width - 8) left = er.left - pr.left + er.width / 2 - tip.offsetWidth - 10;
+      tip.style.left = Math.max(8, left) + 'px';
+      tip.style.top = '48px';
+    }
+    Array.prototype.forEach.call(box.querySelectorAll('.hit'), function (el) {
+      el.addEventListener('mouseenter', function () { show(el); });
+      el.addEventListener('focus', function () { show(el); });
+      el.addEventListener('mouseleave', function () { tip.style.display = 'none'; });
+      el.addEventListener('blur', function () { tip.style.display = 'none'; });
+    });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.seg button'), function (b) {
+    b.addEventListener('click', function () { state.range = b.getAttribute('data-range'); render(); });
+  });
+  document.getElementById('withEx').addEventListener('change', function (e) { state.withEx = e.target.checked; render(); });
+  var resizeTimer = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(render, 150);
+  });
+
+  document.getElementById('foot').innerHTML =
+    '이 페이지에 담긴 것은 판정 시각·단계·종류·건수뿐입니다. 개인정보 값, 질문·명령·SQL 원문, 세션 식별자는 들어 있지 않습니다.<br>' +
+    '「검토 제외」는 검토해서 오탐이나 테스트로 판정한 기록입니다 — 원본 감사로그는 고치지 않고 통계에서만 뺍니다.<br>' +
+    '다시 만들기: <code>node analysis/dashboard.js --out &lt;파일&gt;</code>';
+
+  render();
+})();
+</script>
+</body>
+</html>
