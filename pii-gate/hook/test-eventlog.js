@@ -157,6 +157,19 @@ function startMock() {
     tool_response: { rows: [{ EMAIL: 'x@example.com' }] } });
   check('테이블 조회는 스키마.테이블', last().source && last().source.text === 'APPDB.TB_PERSON_CONTACT', true);
 
+  // IDE(idea) DB 도구는 인자 이름이 다르다 — 2026-10-16 실측에서 queryText 를 몰라 출처가 비었다
+  reset();
+  run({ tool_name: 'mcp__idea__execute_sql_query', tool_input: {
+    connectionId: 'c1', databaseName: '', schemaName: 'APPDB', queryText: "SELECT EMAIL FROM T WHERE NAME='홍길동'" } });
+  check('idea · queryText 도 SQL 출처', last().source && last().source.kind === 'sql' && last().source.text === 'SELECT EMAIL FROM T WHERE NAME=?', true);
+  reset();
+  run({ tool_name: 'mcp__idea__preview_table_data', tool_input: {
+    connectionId: 'c1', databaseName: '', schemaName: 'APPDB', tableName: 'TB_PERSON_CONTACT' } });
+  check('idea · 표 미리보기는 SELECT * 로', last().source && last().source.text === 'SELECT * FROM APPDB.TB_PERSON_CONTACT (미리보기)', true);
+  reset();
+  run({ tool_name: 'mcp__idea__fetch_query_result', tool_input: { resultSetId: 'rs-42', offset: 0 } });
+  check('idea · 결과 이어받기는 resultSetId', last().source && /resultSetId=rs-42/.test(last().source.text), true);
+
   fs.rmSync(HOME, { recursive: true, force: true });
   console.log(`\n합계: ${pass} pass / ${fail} fail`);
   process.exit(fail ? 1 : 0);

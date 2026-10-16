@@ -238,19 +238,27 @@ function redact(text) {
  *         "무슨 컬럼을 달라고 했나"는 그대로 남는다 — 그게 확인하려는 것이다.
  *   명령  PII 모양을 가리고(redact) 비밀값(password=… 등)을 *** 로 가린다.
  *   파일  경로만.
+ * 도구마다 인자 이름이 다르다 — 마스킹 MCP 는 sql, IDE(idea) 는 queryText·tableName·resultSetId.
+ * (2026-10-16 실측: idea 의 queryText 를 몰라 차단 기록에 출처가 비었다.)
  */
 function sourceOf(inp) {
   if (!inp || typeof inp !== 'object') return null;
   const clip = (s) => String(s).replace(/\s+/g, ' ').trim().slice(0, 400);
-  const sql = inp.sql || inp.query;
+  const sql = inp.sql || inp.query || inp.queryText;
   if (typeof sql === 'string' && sql.trim()) return { kind: 'sql', text: clip(normalizeSql(sql)) };
   if (typeof inp.command === 'string') return { kind: 'command', text: clip(maskSecrets(redact(inp.command))) };
   const file = inp.file_path || inp.path;
   if (typeof file === 'string') return { kind: 'file', text: clip(file) };
   if (typeof inp.table === 'string') return { kind: 'sql', text: clip([inp.schema, inp.table].filter(Boolean).join('.')) };
+  // 표 미리보기는 컬럼을 고르지 않고 전부 가져온다 — SELECT * 로 적어 판정이 「판단 불가」가 되게 한다
+  if (typeof inp.tableName === 'string') {
+    return { kind: 'sql', text: clip(`SELECT * FROM ${[inp.schemaName, inp.tableName].filter(Boolean).join('.')} (미리보기)`) };
+  }
+  if (typeof inp.resultSetId === 'string') return { kind: 'input', text: clip(`이전 조회 결과 이어받기 resultSetId=${inp.resultSetId}`) };
   for (const k of ['url', 'text', 'code']) {
     if (typeof inp[k] === 'string' && inp[k].trim()) return { kind: 'input', text: clip(maskSecrets(redact(inp[k]))) };
   }
+  if (typeof inp.connectionId === 'string') return { kind: 'input', text: clip(`connectionId=${inp.connectionId}`) };
   return null;
 }
 
@@ -341,8 +349,8 @@ async function post_phase(payload) {
   let detail = null;
   if (isDb) {
     const meta = pickMeta(text);
-    const q = inp.sql || inp.query || inp.table
-      || [inp.schema, inp.table].filter(Boolean).join('.') || '';
+    const q = inp.sql || inp.query || inp.queryText || inp.table
+      || [inp.schema || inp.schemaName, inp.table || inp.tableName].filter(Boolean).join('.') || '';
     detail = {
       account: inp.account || null,
       schema: inp.schema || null,
